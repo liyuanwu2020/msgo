@@ -1,6 +1,8 @@
 package msgo
 
 import (
+	"github.com/liyuanwu2020/msgo/render"
+	"html/template"
 	"log"
 	"net/http"
 )
@@ -106,6 +108,8 @@ func (r *router) Group(name string) *routerGroup {
 
 type Engine struct {
 	router
+	funcMap    template.FuncMap
+	HTMLRender render.HTMLRender
 }
 
 func New() *Engine {
@@ -114,6 +118,20 @@ func New() *Engine {
 	}
 }
 
+func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
+	e.funcMap = funcMap
+}
+
+func (e *Engine) SetHTMLRender(render render.HTMLRender) {
+	e.HTMLRender = render
+}
+
+func (e *Engine) LoadTemplate(pattern string) {
+	t := template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern))
+	e.SetHTMLRender(render.HTMLRender{Template: t})
+}
+
+// 实现 http.server 的 Handler 接口
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.httpRequestHandle(w, r)
 }
@@ -129,7 +147,7 @@ func (e *Engine) Run() {
 
 func (e *Engine) httpRequestHandle(w http.ResponseWriter, r *http.Request) {
 	method := r.Method
-	ctx := &Context{W: w, R: r}
+	ctx := &Context{W: w, R: r, engine: e}
 	for _, group := range e.routerGroups {
 		//去掉uri的分组名称
 		routerName := SubStringLast(r.RequestURI, "/"+group.name)
