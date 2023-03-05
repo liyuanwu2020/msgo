@@ -1,6 +1,8 @@
 package msgo
 
 import (
+	"encoding/json"
+	"encoding/xml"
 	"html/template"
 	"net/http"
 )
@@ -47,5 +49,28 @@ func (c *Context) Template(name string, data any) error {
 	c.W.Header().Set("Content-Type", "text/html;charset=utf-8")
 	var err error
 	err = c.engine.HTMLRender.Template.ExecuteTemplate(c.W, name, data)
+	return err
+}
+
+func (c *Context) JSON(status int, data any) error {
+	c.W.Header().Set("Content-Type", "application/json;charset=utf-8")
+	c.W.WriteHeader(status)
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	_, err = c.W.Write(jsonData)
+	return err
+}
+
+func (c *Context) XML(status int, data any) error {
+	c.W.Header().Set("Content-Type", "application/xml;charset=utf-8")
+	c.W.WriteHeader(status)
+	//xmlData, err := xml.Marshal(data)
+	//if err != nil {
+	//	return err
+	//}
+	//_, err = c.W.Write(xmlData)
+	err := xml.NewEncoder(c.W).Encode(data)
 	return err
 }
