@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type Context struct {
@@ -15,6 +16,26 @@ type Context struct {
 	RequestMethod  string
 	engine         *Engine
 	queryCache     url.Values
+}
+
+// GetMapQuery http://localhost:8080/queryMap?user[id]=1&user[name]=张三
+func (c *Context) GetMapQuery(key string) (map[string]string, bool) {
+	c.initQueryCache()
+	rs := make(map[string]string)
+	exists := false
+	for k, v := range c.queryCache {
+		start := strings.Index(k, "[")
+
+		if start > 0 && k[:start] == key {
+			end := strings.Index(k[start+1:], "]")
+			if end > 0 {
+				exists = true
+				rs[k[start+1:][:end]] = v[0]
+			}
+
+		}
+	}
+	return rs, exists
 }
 
 func (c *Context) DefaultQuery(key, defaultValue string) string {
@@ -145,6 +166,8 @@ func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
 // Render 通用渲染
 func (c *Context) Render(r render.Render, statusCode int) error {
 	r.WriteContentType(c.W)
-	c.W.WriteHeader(statusCode)
+	if statusCode != http.StatusOK {
+		c.W.WriteHeader(statusCode)
+	}
 	return r.Render(c.W)
 }
