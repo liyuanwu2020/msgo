@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"sync"
 )
 
 const ANY = "ANY"
@@ -110,12 +111,21 @@ type Engine struct {
 	router
 	funcMap    template.FuncMap
 	HTMLRender render.HTMLRender
+	pool       sync.Pool
 }
 
 func New() *Engine {
-	return &Engine{
+	engine := &Engine{
 		router: router{},
 	}
+	engine.pool.New = func() any {
+		return engine.allocateContext()
+	}
+	return engine
+}
+
+func (e *Engine) allocateContext() any {
+	return &Context{engine: e}
 }
 
 func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
@@ -133,7 +143,11 @@ func (e *Engine) LoadTemplate(pattern string) {
 
 // 实现 http.server 的 Handler 接口
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	e.httpRequestHandle(w, r)
+	ctx := e.pool.Get().(*Context)
+	ctx.W = w
+	ctx.R = r
+	e.httpRequestHandle(ctx)
+	e.pool.Put(ctx)
 }
 
 func (e *Engine) Run() {
@@ -145,17 +159,16 @@ func (e *Engine) Run() {
 	}
 }
 
-func (e *Engine) httpRequestHandle(w http.ResponseWriter, r *http.Request) {
-	method := r.Method
-	ctx := &Context{W: w, R: r, engine: e}
+func (e *Engine) httpRequestHandle(ctx *Context) {
+	method := ctx.R.Method
 	for _, group := range e.routerGroups {
 		//去掉uri的分组名称
-		routerName := SubStringLast(r.RequestURI, "/"+group.name)
+		routerName := SubStringLast(ctx.R.URL.Path, "/"+group.name)
 		//路由是否存在
 		node := group.treeNode.Get(routerName)
 		if node != nil && node.isEnd {
 			handlerFunc, ok := group.handlerFuncMap[node.routerName]
-			log.Printf("handlerFuncMap routerName %s %v", node.routerName, ok)
+			log.Printf("handlerFuncMap [%s] match [%s] %v", routerName, node.routerName, ok)
 			if ok {
 				ctx.NodeRouterName = node.routerName
 				if handle, ok := handlerFunc[method]; ok {
@@ -169,12 +182,12 @@ func (e *Engine) httpRequestHandle(w http.ResponseWriter, r *http.Request) {
 					group.methodHandler(handle, ctx)
 					return
 				}
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				log.Printf("%s %s not allowed", r.RequestURI, method)
+				ctx.W.WriteHeader(http.StatusMethodNotAllowed)
+				log.Printf("%s %s not allowed", ctx.R.RequestURI, method)
 				return
 			}
 		}
 	}
-	w.WriteHeader(http.StatusNotFound)
-	log.Printf("%s %s not found", r.RequestURI, method)
+	ctx.W.WriteHeader(http.StatusNotFound)
+	log.Printf("%s %s not found", ctx.R.RequestURI, method)
 }

@@ -3,6 +3,7 @@ package msgo
 import (
 	"github.com/liyuanwu2020/msgo/render"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 )
@@ -13,6 +14,43 @@ type Context struct {
 	NodeRouterName string
 	RequestMethod  string
 	engine         *Engine
+	queryCache     url.Values
+}
+
+func (c *Context) DefaultQuery(key, defaultValue string) string {
+	array, ok := c.GetQueryArray(key)
+	if !ok {
+		return defaultValue
+	}
+	return array[0]
+}
+
+func (c *Context) GetQuery(key string) string {
+	c.initQueryCache()
+	return c.queryCache.Get(key)
+}
+
+func (c *Context) QueryArray(key string) (values []string) {
+	c.initQueryCache()
+	values, _ = c.queryCache[key]
+	return
+}
+
+func (c *Context) GetQueryArray(key string) (values []string, ok bool) {
+	c.initQueryCache()
+	values, ok = c.queryCache[key]
+	return
+}
+
+func (c *Context) initQueryCache() {
+	//if c.queryCache == nil {
+	if c.R != nil {
+		c.queryCache = c.R.URL.Query()
+	} else {
+		c.queryCache = url.Values{}
+	}
+	//}
+	log.Println(c.queryCache)
 }
 
 func (c *Context) HTMLTemplate(name string, data any, files ...string) error {
