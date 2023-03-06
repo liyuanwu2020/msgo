@@ -1,9 +1,7 @@
 package msgo
 
 import (
-	"encoding/json"
-	"encoding/xml"
-	"fmt"
+	"github.com/liyuanwu2020/msgo/render"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -15,14 +13,6 @@ type Context struct {
 	NodeRouterName string
 	RequestMethod  string
 	engine         *Engine
-}
-
-func (c *Context) HTML(status int, html string) error {
-	c.W.Header().Set("Content-Type", "text/html;charset=utf-8")
-	//状态码默认200 http.StatusOK
-	c.W.WriteHeader(status)
-	_, err := c.W.Write([]byte(html))
-	return err
 }
 
 func (c *Context) HTMLTemplate(name string, data any, files ...string) error {
@@ -47,34 +37,46 @@ func (c *Context) HTMLTemplateGlob(name string, data any, pattern string) error 
 	return err
 }
 
+// HTML 直接输出 html 字符串
+func (c *Context) HTML(status int, html string) error {
+	return c.Render(&render.HTML{Data: html}, status)
+}
+
+// Template 带模板的 html
 func (c *Context) Template(name string, data any) error {
-	c.W.Header().Set("Content-Type", "text/html;charset=utf-8")
-	var err error
-	err = c.engine.HTMLRender.Template.ExecuteTemplate(c.W, name, data)
-	return err
+	return c.Render(&render.HTML{
+		Name:       name,
+		Data:       data,
+		Template:   c.engine.HTMLRender.Template,
+		IsTemplate: true,
+	}, http.StatusOK)
 }
 
 func (c *Context) JSON(status int, data any) error {
-	c.W.Header().Set("Content-Type", "application/json;charset=utf-8")
-	c.W.WriteHeader(status)
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	_, err = c.W.Write(jsonData)
-	return err
+	return c.Render(&render.JSON{Data: data}, status)
 }
 
 func (c *Context) XML(status int, data any) error {
-	c.W.Header().Set("Content-Type", "application/xml;charset=utf-8")
+	return c.Render(&render.XML{Data: data}, status)
+}
+
+// String 字符串
+func (c *Context) String(status int, format string, values ...any) error {
 	c.W.WriteHeader(status)
-	//xmlData, err := xml.Marshal(data)
-	//if err != nil {
-	//	return err
-	//}
-	//_, err = c.W.Write(xmlData)
-	err := xml.NewEncoder(c.W).Encode(data)
+	err := c.Render(&render.String{
+		Format: format,
+		Values: values,
+	}, status)
 	return err
+}
+
+// Redirect 重定向
+func (c *Context) Redirect(status int, location string) error {
+	return c.Render(&render.Redirect{
+		StatusCode: status,
+		Request:    c.R,
+		Location:   location,
+	}, status)
 }
 
 func (c *Context) File(filePath string) {
@@ -102,23 +104,9 @@ func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
 	http.FileServer(fs).ServeHTTP(c.W, c.R)
 }
 
-// Redirect 重定向
-func (c *Context) Redirect(status int, location string) {
-	if (status < http.StatusMultipleChoices || status > http.StatusPermanentRedirect) && status != http.StatusCreated {
-		panic(fmt.Sprintf("cannot redirect with status code %d", status))
-	}
-	http.Redirect(c.W, c.R, location, status)
-}
-
-// String 字符串
-func (c *Context) String(status int, format string, values ...any) error {
-	c.W.Header().Set("Content-Type", "text/plain;charset=utf-8")
-	c.W.WriteHeader(status)
-	var err error
-	if len(values) > 0 {
-		_, err = fmt.Fprintf(c.W, format, values...)
-	} else {
-		_, err = c.W.Write(StringToBytes(format))
-	}
-	return err
+// Render 通用渲染
+func (c *Context) Render(r render.Render, statusCode int) error {
+	r.WriteContentType(c.W)
+	c.W.WriteHeader(statusCode)
+	return r.Render(c.W)
 }

@@ -3,7 +3,6 @@ package msgo
 import (
 	"strings"
 	"unicode"
-	"unsafe"
 )
 
 func SubStringLast(str, substr string) string {
@@ -21,13 +20,4 @@ func isASCII(s string) bool {
 		}
 	}
 	return true
-}
-
-func StringToBytes(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(
-		&struct {
-			string
-			Cap int
-		}{s, len(s)},
-	))
 }
