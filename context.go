@@ -1,21 +1,127 @@
 package msgo
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/go-playground/validator/v10"
 	"github.com/liyuanwu2020/msgo/render"
 	"html/template"
+	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"reflect"
 	"strings"
 )
 
+const defaultMultipartMemory = 32 << 20
+
 type Context struct {
-	W              http.ResponseWriter
-	R              *http.Request
-	NodeRouterName string
-	RequestMethod  string
-	engine         *Engine
-	queryCache     url.Values
+	W                     http.ResponseWriter
+	R                     *http.Request
+	NodeRouterName        string
+	RequestMethod         string
+	engine                *Engine
+	queryCache            url.Values
+	DisallowUnknownFields bool
+	IsValidate            bool
+	requiredTag           string
+}
+
+func (c *Context) DealJson(data any) error {
+	body := c.R.Body
+	if c.R == nil || body == nil {
+		return errors.New("invalid json request")
+	}
+	decoder := json.NewDecoder(body)
+	if c.DisallowUnknownFields {
+		decoder.DisallowUnknownFields()
+	}
+	if c.IsValidate {
+		err := c.validateParam(data, decoder)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := decoder.Decode(data)
+		if err != nil {
+			return err
+		}
+	}
+	log.Println("github validator begin")
+	return validate(data)
+}
+
+func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dstName string) error {
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer func(src multipart.File) {
+		err := src.Close()
+		if err != nil {
+
+		}
+	}(src)
+	dst, err := os.Create(dstName)
+	if err != nil {
+		return err
+	}
+	defer func(dst *os.File) {
+		err := dst.Close()
+		if err != nil {
+
+		}
+	}(dst)
+
+	_, err = io.Copy(dst, src)
+	return err
+}
+
+// FormFile 获取文件
+func (c *Context) FormFile(key string) (*multipart.FileHeader, error) {
+	file, header, err := c.R.FormFile(key)
+	defer func(file multipart.File) {
+		err := file.Close()
+		if err != nil {
+
+		}
+	}(file)
+	return header, err
+}
+
+func (c *Context) FormFiles(key string) []*multipart.FileHeader {
+	multipartForm, err := c.MultipartForm()
+	if err != nil {
+		return make([]*multipart.FileHeader, 0)
+	}
+	return multipartForm.File[key]
+}
+
+func (c *Context) MultipartForm() (*multipart.Form, error) {
+	err := c.R.ParseMultipartForm(defaultMultipartMemory)
+	return c.R.MultipartForm, err
+}
+
+func (c *Context) GetPost(key string) (string, error) {
+	if err := c.R.ParseMultipartForm(defaultMultipartMemory); err != nil {
+		if !errors.Is(err, http.ErrNotMultipart) {
+			return "", err
+		}
+	}
+	return c.R.PostForm.Get(key), nil
+}
+
+func (c *Context) GetAllPost() (url.Values, error) {
+	if err := c.R.ParseMultipartForm(defaultMultipartMemory); err != nil {
+		if !errors.Is(err, http.ErrNotMultipart) {
+			return nil, err
+		}
+	}
+	return c.R.PostForm, nil
 }
 
 // GetMapQuery http://localhost:8080/queryMap?user[id]=1&user[name]=张三
@@ -170,4 +276,91 @@ func (c *Context) Render(r render.Render, statusCode int) error {
 		c.W.WriteHeader(statusCode)
 	}
 	return r.Render(c.W)
+}
+
+func (c *Context) validateParam(data any, decoder *json.Decoder) error {
+	valueOf := reflect.ValueOf(data)
+	if valueOf.Kind() != reflect.Pointer {
+		return errors.New("data argument must have a pointer type")
+	}
+	elem := valueOf.Elem().Interface()
+	value := reflect.ValueOf(elem)
+	switch value.Kind() {
+	case reflect.Struct:
+		return checkParam(value, data, decoder)
+	case reflect.Array, reflect.Slice:
+		ele := value.Type().Elem()
+		if ele.Kind() == reflect.Ptr {
+			ele = ele.Elem()
+		}
+		if ele.Kind() == reflect.Struct {
+			return checkSliceParam(ele, data, decoder)
+		}
+	default:
+		return decoder.Decode(data)
+	}
+	return nil
+}
+
+func checkSliceParam(elem reflect.Type, data any, decoder *json.Decoder) error {
+	mapVal := make([]map[string]interface{}, 0)
+	//解析为map
+	err := decoder.Decode(&mapVal)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < elem.NumField(); i++ {
+		field := elem.Field(i)
+		name := field.Name
+		jsonName := field.Tag.Get("json")
+		requiredTag := field.Tag.Get("required")
+		if jsonName == "" {
+			jsonName = name
+		}
+		for i, v := range mapVal {
+			if v[jsonName] == nil && requiredTag != "" {
+				return errors.New(fmt.Sprintf("row[%d] field [%s] is not exist", i+1, jsonName))
+			}
+		}
+
+	}
+	b, _ := json.Marshal(mapVal)
+	return json.Unmarshal(b, data)
+}
+
+func checkParam(value reflect.Value, data any, decoder *json.Decoder) error {
+	mapVal := make(map[string]interface{})
+	//解析为map
+	err := decoder.Decode(&mapVal)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < value.NumField(); i++ {
+		field := value.Type().Field(i)
+		name := field.Name
+		jsonName := field.Tag.Get("json")
+		requiredTag := field.Tag.Get("required")
+		if jsonName == "" {
+			jsonName = name
+		}
+		if mapVal[jsonName] == nil && requiredTag != "" {
+			return errors.New(fmt.Sprintf("field [%s] is not exist", jsonName))
+		}
+	}
+	b, _ := json.Marshal(mapVal)
+	return json.Unmarshal(b, data)
+}
+
+func validate(data any) error {
+	v := reflect.ValueOf(data)
+	elem := v.Elem().Interface()
+	//todo
+	log.Println(v, v.Kind(), v.Type(), elem, v.Type().Elem())
+	switch v.Kind() {
+	case reflect.Array, reflect.Slice:
+	case reflect.Ptr:
+	case reflect.Struct:
+		return validator.New().Struct(data)
+	}
+	return nil
 }

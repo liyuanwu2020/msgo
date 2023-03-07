@@ -168,7 +168,7 @@ func (e *Engine) httpRequestHandle(ctx *Context) {
 		node := group.treeNode.Get(routerName)
 		if node != nil && node.isEnd {
 			handlerFunc, ok := group.handlerFuncMap[node.routerName]
-			log.Printf("handlerFuncMap [%s] match [%s] %v", routerName, node.routerName, ok)
+			//log.Printf("handlerFuncMap [%s] match [%s] %v", routerName, node.routerName, ok)
 			if ok {
 				ctx.NodeRouterName = node.routerName
 				if handle, ok := handlerFunc[method]; ok {
