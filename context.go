@@ -1,11 +1,10 @@
 package msgo
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"github.com/go-playground/validator/v10"
+	"github.com/liyuanwu2020/msgo/binding"
 	"github.com/liyuanwu2020/msgo/render"
+	"github.com/liyuanwu2020/msgo/validator"
 	"html/template"
 	"io"
 	"log"
@@ -13,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
 	"strings"
 )
 
@@ -28,31 +26,28 @@ type Context struct {
 	queryCache            url.Values
 	DisallowUnknownFields bool
 	IsValidate            bool
-	requiredTag           string
+	StructValidator       validator.StructValidator
 }
 
-func (c *Context) DealJson(data any) error {
-	body := c.R.Body
-	if c.R == nil || body == nil {
-		return errors.New("invalid json request")
+func (c *Context) BindJson(obj any) error {
+	jsonBinding := binding.JSON
+	jsonBinding.DisallowUnknownFields = c.DisallowUnknownFields
+	jsonBinding.IsValidate = c.IsValidate
+	jsonBinding.StructValidator = c.StructValidator
+	return c.MustBindWith(obj, jsonBinding)
+}
+
+func (c *Context) MustBindWith(obj any, b binding.Binding) error {
+	//如果发生错误，返回400状态码 参数错误
+	if err := c.ShouldBindWith(obj, b); err != nil {
+		c.W.WriteHeader(http.StatusBadRequest)
+		return err
 	}
-	decoder := json.NewDecoder(body)
-	if c.DisallowUnknownFields {
-		decoder.DisallowUnknownFields()
-	}
-	if c.IsValidate {
-		err := c.validateParam(data, decoder)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := decoder.Decode(data)
-		if err != nil {
-			return err
-		}
-	}
-	log.Println("github validator begin")
-	return validate(data)
+	return nil
+}
+
+func (c *Context) ShouldBindWith(obj any, b binding.Binding) error {
+	return b.Bind(c.R, obj)
 }
 
 func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dstName string) error {
@@ -276,137 +271,4 @@ func (c *Context) Render(r render.Render, statusCode int) error {
 		c.W.WriteHeader(statusCode)
 	}
 	return r.Render(c.W)
-}
-
-func (c *Context) validateParam(data any, decoder *json.Decoder) error {
-	valueOf := reflect.ValueOf(data)
-	if valueOf.Kind() != reflect.Pointer {
-		return errors.New("data argument must have a pointer type")
-	}
-	elem := valueOf.Elem().Interface()
-	value := reflect.ValueOf(elem)
-	switch value.Kind() {
-	case reflect.Struct:
-		return checkParam(value, data, decoder)
-	case reflect.Array, reflect.Slice:
-		ele := value.Type().Elem()
-		if ele.Kind() == reflect.Ptr {
-			ele = ele.Elem()
-		}
-		if ele.Kind() == reflect.Struct {
-			return checkSliceParam(ele, data, decoder)
-		}
-	default:
-		return decoder.Decode(data)
-	}
-	return nil
-}
-
-func checkSliceParam(elem reflect.Type, data any, decoder *json.Decoder) error {
-	mapVal := make([]map[string]interface{}, 0)
-	//解析为map
-	err := decoder.Decode(&mapVal)
-	if err != nil {
-		return err
-	}
-	for i := 0; i < elem.NumField(); i++ {
-		field := elem.Field(i)
-		name := field.Name
-		jsonName := field.Tag.Get("json")
-		requiredTag := field.Tag.Get("required")
-		if jsonName == "" {
-			jsonName = name
-		}
-		for i, v := range mapVal {
-			if v[jsonName] == nil && requiredTag != "" {
-				return errors.New(fmt.Sprintf("row[%d] field [%s] is not exist", i+1, jsonName))
-			}
-		}
-
-	}
-	b, _ := json.Marshal(mapVal)
-	return json.Unmarshal(b, data)
-}
-
-func checkParam(value reflect.Value, data any, decoder *json.Decoder) error {
-	mapVal := make(map[string]interface{})
-	//解析为map
-	err := decoder.Decode(&mapVal)
-	if err != nil {
-		return err
-	}
-	for i := 0; i < value.NumField(); i++ {
-		field := value.Type().Field(i)
-		name := field.Name
-		jsonName := field.Tag.Get("json")
-		requiredTag := field.Tag.Get("required")
-		if jsonName == "" {
-			jsonName = name
-		}
-		if mapVal[jsonName] == nil && requiredTag != "" {
-			return errors.New(fmt.Sprintf("field [%s] is not exist", jsonName))
-		}
-	}
-	b, _ := json.Marshal(mapVal)
-	return json.Unmarshal(b, data)
-}
-
-type SliceValidationError []error
-
-func (err SliceValidationError) Error() string {
-	n := len(err)
-	switch n {
-	case 0:
-		return ""
-	default:
-		var b strings.Builder
-		if err[0] != nil {
-			_, err := fmt.Fprintf(&b, "[%d]: %s", 0, err[0].Error())
-			if err != nil {
-				return ""
-			}
-		}
-		if n > 1 {
-			for i := 1; i < n; i++ {
-				if err[i] != nil {
-					b.WriteString("\n")
-					_, err := fmt.Fprintf(&b, "[%d]: %s", i, err[i].Error())
-					if err != nil {
-						return ""
-					}
-				}
-			}
-		}
-		return b.String()
-	}
-}
-
-func validate(data any) error {
-	if data == nil {
-		return nil
-	}
-	v := reflect.ValueOf(data)
-	switch v.Kind() {
-	case reflect.Array, reflect.Slice:
-		count := v.Len()
-		errs := make(SliceValidationError, 0)
-		for i := 0; i < count; i++ {
-			if err := validateStruct(v.Index(i).Interface()); err != nil {
-				errs = append(errs, err)
-			}
-		}
-		if len(errs) == 0 {
-			return nil
-		}
-		return errs
-	case reflect.Ptr:
-		return validate(v.Elem().Interface())
-	case reflect.Struct:
-		return validateStruct(data)
-	}
-	return nil
-}
-
-func validateStruct(data any) error {
-	return validator.New().Struct(data)
 }
