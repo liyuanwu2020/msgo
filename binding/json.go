@@ -41,14 +41,9 @@ func (j *jsonBinding) Bind(r *http.Request, data any) error {
 	}
 	//github validator begin
 	if j.StructValidator != nil {
-		return j.StructValidate(j.StructValidator, data)
+		return validator.StructValidate(j.StructValidator, data)
 	}
 	return nil
-}
-
-// StructValidate 通用结构体校验
-func (j *jsonBinding) StructValidate(s validator.StructValidator, data any) error {
-	return s.ValidateStruct(data)
 }
 
 func (j *jsonBinding) validateParam(data any, decoder *json.Decoder) error {

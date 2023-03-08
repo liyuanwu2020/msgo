@@ -29,6 +29,12 @@ type Context struct {
 	StructValidator       validator.StructValidator
 }
 
+func (c *Context) BindXML(obj any) error {
+	xml := binding.XML
+	xml.StructValidator = c.StructValidator
+	return c.MustBindWith(obj, xml)
+}
+
 func (c *Context) BindJson(obj any) error {
 	jsonBinding := binding.JSON
 	jsonBinding.DisallowUnknownFields = c.DisallowUnknownFields

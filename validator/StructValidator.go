@@ -67,6 +67,11 @@ func (d *defaultValidator) lazyInit() {
 	})
 }
 
+// StructValidate 通用结构体校验
+func StructValidate(s StructValidator, data any) error {
+	return s.ValidateStruct(data)
+}
+
 type SliceValidationError []error
 
 func (err SliceValidationError) Error() string {
