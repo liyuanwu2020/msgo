@@ -17,10 +17,10 @@ type MiddlewareFunc func(handlerFunc HandlerFunc) HandlerFunc
 type routerGroup struct {
 	name               string
 	handlerFuncMap     map[string]map[string]HandlerFunc
-	middlewaresFuncMap map[string]map[string][]MiddlewareFunc
 	handlerMethodMap   map[string][]string
 	treeNode           *treeNode
 	middlewares        []MiddlewareFunc
+	middlewaresFuncMap map[string]map[string][]MiddlewareFunc
 }
 
 func (r *routerGroup) Use(middlewareFunc ...MiddlewareFunc) {
@@ -118,6 +118,7 @@ func New() *Engine {
 	engine := &Engine{
 		router: router{},
 	}
+	log.Println("engine New")
 	engine.pool.New = func() any {
 		return engine.allocateContext()
 	}
@@ -125,6 +126,7 @@ func New() *Engine {
 }
 
 func (e *Engine) allocateContext() any {
+	log.Println("engine allocateContext")
 	return &Context{engine: e}
 }
 

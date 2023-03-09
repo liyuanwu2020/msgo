@@ -27,6 +27,7 @@ type Context struct {
 	DisallowUnknownFields bool
 	IsValidate            bool
 	StructValidator       validator.StructValidator
+	StatusCode            int
 }
 
 func (c *Context) BindXML(obj any) error {
@@ -272,6 +273,7 @@ func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
 
 // Render 通用渲染
 func (c *Context) Render(r render.Render, statusCode int) error {
+	c.StatusCode = statusCode
 	r.WriteContentType(c.W)
 	if statusCode != http.StatusOK {
 		c.W.WriteHeader(statusCode)
