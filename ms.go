@@ -118,7 +118,6 @@ func New() *Engine {
 	engine := &Engine{
 		router: router{},
 	}
-	log.Println("engine New")
 	engine.pool.New = func() any {
 		return engine.allocateContext()
 	}
@@ -126,7 +125,6 @@ func New() *Engine {
 }
 
 func (e *Engine) allocateContext() any {
-	log.Println("engine allocateContext")
 	return &Context{engine: e}
 }
 

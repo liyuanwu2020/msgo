@@ -1,10 +1,11 @@
 package msgo
 
 import (
+	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -32,7 +33,19 @@ type LoggerConfig struct {
 	out       io.Writer
 }
 
-type LoggerFormatter func(params LogFormatterParams) string
+type LoggerFormatter func(params *LogFormatterParams) string
+
+func (l *LogFormatterParams) StatusCodeColor(StatusCode int) string {
+	color := white
+	if StatusCode == http.StatusOK {
+		color = green
+	}
+	return color
+}
+
+func (l *LogFormatterParams) ResetColor() string {
+	return reset
+}
 
 type LogFormatterParams struct {
 	Request    *http.Request
@@ -44,7 +57,29 @@ type LogFormatterParams struct {
 	Path       string
 }
 
+var defaultFormatter = func(params *LogFormatterParams) string {
+	StatusCodeColor := params.StatusCodeColor(params.StatusCode)
+	resetColor := params.ResetColor()
+	return fmt.Sprintf("[msgo] %v |%s %3d %s| %13v | %15s |%-7s %#v",
+		params.TimeStamp.Format("2006/01/02 - 15:04:05"),
+		StatusCodeColor,
+		params.StatusCode,
+		resetColor,
+		params.Latency,
+		params.ClientIP,
+		params.Method,
+		params.Path,
+	)
+}
+var defaultWriter io.Writer = os.Stdout
+
 func LoggerWithConfig(cnf LoggerConfig, next HandlerFunc) HandlerFunc {
+	if cnf.Formatter == nil {
+		cnf.Formatter = defaultFormatter
+	}
+	if cnf.out == nil {
+		cnf.out = defaultWriter
+	}
 	return func(ctx *Context) {
 		// Start timer
 		start := time.Now()
@@ -57,16 +92,22 @@ func LoggerWithConfig(cnf LoggerConfig, next HandlerFunc) HandlerFunc {
 		latency := stop.Sub(start)
 		ip, _, _ := net.SplitHostPort(strings.TrimSpace(ctx.R.RemoteAddr))
 		clientIP := net.ParseIP(ip)
-		method := ctx.R.Method
-		statusCode := ctx.StatusCode
 		if raw != "" {
 			path = path + "?" + raw
 		}
-		log.Printf("[msgo] %v | %3d | %13v | %15s |%-7s %#v",
-			stop.Format("2006/01/02 - 15:04:05"),
-			statusCode,
-			latency, clientIP, method, path,
-		)
+		param := &LogFormatterParams{
+			Request:    ctx.R,
+			TimeStamp:  stop,
+			StatusCode: ctx.StatusCode,
+			Latency:    latency,
+			ClientIP:   clientIP,
+			Method:     ctx.R.Method,
+			Path:       path,
+		}
+		_, err := fmt.Fprint(cnf.out, cnf.Formatter(param))
+		if err != nil {
+			return
+		}
 	}
 }
 
