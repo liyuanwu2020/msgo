@@ -3,6 +3,7 @@ package msgo
 import (
 	"errors"
 	"github.com/liyuanwu2020/msgo/binding"
+	msLog "github.com/liyuanwu2020/msgo/log"
 	"github.com/liyuanwu2020/msgo/render"
 	"github.com/liyuanwu2020/msgo/validator"
 	"html/template"
@@ -28,6 +29,7 @@ type Context struct {
 	IsValidate            bool
 	StructValidator       validator.StructValidator
 	StatusCode            int
+	Logger                *msLog.Logger
 }
 
 func (c *Context) BindXML(obj any) error {
@@ -275,8 +277,19 @@ func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
 func (c *Context) Render(r render.Render, statusCode int) error {
 	c.StatusCode = statusCode
 	r.WriteContentType(c.W)
-	if statusCode != http.StatusOK {
-		c.W.WriteHeader(statusCode)
-	}
+	c.W.WriteHeader(statusCode)
 	return r.Render(c.W)
+}
+
+func (c *Context) Fail(code int, msg any) {
+	_ = c.String(code, msg.(string))
+}
+
+func (c *Context) HandleWithError(statusCode int, obj any, err error) {
+	if err != nil {
+		code, data := c.engine.errorHandler(err)
+		err = c.JSON(code, data)
+	} else {
+		err = c.JSON(statusCode, obj)
+	}
 }

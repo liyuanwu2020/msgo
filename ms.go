@@ -1,6 +1,7 @@
 package msgo
 
 import (
+	msLog "github.com/liyuanwu2020/msgo/log"
 	"github.com/liyuanwu2020/msgo/render"
 	"html/template"
 	"log"
@@ -93,6 +94,7 @@ func (r *routerGroup) Options(name string, handlerFunc HandlerFunc, middlewareFu
 
 type router struct {
 	routerGroups []*routerGroup
+	engine       *Engine
 }
 
 func (r *router) Group(name string) *routerGroup {
@@ -103,15 +105,21 @@ func (r *router) Group(name string) *routerGroup {
 		handlerMethodMap:   make(map[string][]string),
 		treeNode:           &treeNode{name: "/", children: make([]*treeNode, 0)},
 	}
+	g.Use(r.engine.middlewares...)
 	r.routerGroups = append(r.routerGroups, g)
 	return g
 }
 
+type ErrorHandler func(err error) (int, any)
+
 type Engine struct {
 	router
-	funcMap    template.FuncMap
-	HTMLRender render.HTMLRender
-	pool       sync.Pool
+	funcMap      template.FuncMap
+	HTMLRender   render.HTMLRender
+	pool         sync.Pool
+	Logger       *msLog.Logger
+	middlewares  []MiddlewareFunc
+	errorHandler ErrorHandler
 }
 
 func New() *Engine {
@@ -121,6 +129,13 @@ func New() *Engine {
 	engine.pool.New = func() any {
 		return engine.allocateContext()
 	}
+	return engine
+}
+func Default() *Engine {
+	engine := New()
+	engine.Logger = msLog.Default()
+	engine.Use(Logging, Recovery)
+	engine.router.engine = engine
 	return engine
 }
 
@@ -146,6 +161,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := e.pool.Get().(*Context)
 	ctx.W = w
 	ctx.R = r
+	ctx.Logger = e.Logger
 	e.httpRequestHandle(ctx)
 	e.pool.Put(ctx)
 }
@@ -190,4 +206,12 @@ func (e *Engine) httpRequestHandle(ctx *Context) {
 	}
 	ctx.W.WriteHeader(http.StatusNotFound)
 	log.Printf("%s %s not found", ctx.R.RequestURI, method)
+}
+
+func (e *Engine) Use(middlewareFunc ...MiddlewareFunc) {
+	e.middlewares = middlewareFunc
+}
+
+func (e *Engine) RegisterErrorHandler(handler ErrorHandler) {
+	e.errorHandler = handler
 }
