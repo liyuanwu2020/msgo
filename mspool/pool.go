@@ -2,6 +2,7 @@ package mspool
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -48,6 +49,7 @@ func (p *Pool) Submit(task func()) error {
 	w := p.GetWorker()
 	//使用 worker 执行 task
 	w.task <- task
+	w.pool.incrRunning()
 	return nil
 }
 
@@ -60,14 +62,45 @@ func (p *Pool) GetWorker() *Worker {
 	var w *Worker
 	i := len(p.workers)
 	if i > 0 {
+		p.lock.Lock()
 		w = p.workers[0]
 		p.workers = p.workers[1:]
+		p.lock.Unlock()
 	} else {
 		if p.cap < p.running {
-			w = &Worker{}
+			w = &Worker{
+				pool: p,
+				task: make(chan func(), 1),
+			}
+			w.Run()
 		} else {
-			w <- p.
+			for {
+				p.lock.Lock()
+				idleWorkers := p.workers
+				n := len(idleWorkers) - 1
+				if n > 0 {
+					w = idleWorkers[n]
+					idleWorkers[n] = nil
+					p.workers = idleWorkers[:n]
+				}
+				p.lock.Unlock()
+			}
 		}
 	}
 	return w
+}
+
+func (p *Pool) incrRunning() {
+	atomic.AddInt32(&p.running, 1)
+}
+
+func (p *Pool) decrRunning() {
+	atomic.AddInt32(&p.running, -1)
+}
+
+func (p *Pool) PutWorker(w *Worker) {
+	w.lastTime = time.Now()
+	p.lock.Lock()
+	p.workers = append(p.workers, w)
+	p.lock.Unlock()
 }
