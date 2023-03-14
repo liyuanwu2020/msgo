@@ -60,7 +60,7 @@ type LogFormatterParams struct {
 var defaultFormatter = func(params *LogFormatterParams) string {
 	StatusCodeColor := params.StatusCodeColor(params.StatusCode)
 	resetColor := params.ResetColor()
-	return fmt.Sprintf("[msgo] %v |%s %3d %s| %13v | %15s |%-7s %#v",
+	return fmt.Sprintf("[msgo] %v |%s %3d %s| %13v | %15s |%-7s %#v\n",
 		params.TimeStamp.Format("2006/01/02 - 15:04:05"),
 		StatusCodeColor,
 		params.StatusCode,

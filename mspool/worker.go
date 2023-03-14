@@ -15,6 +15,9 @@ func (w *Worker) Run() {
 
 func (w *Worker) running() {
 	for f := range w.task {
+		if f == nil {
+			return
+		}
 		f()
 		w.pool.PutWorker(w)
 		w.pool.decrRunning()
