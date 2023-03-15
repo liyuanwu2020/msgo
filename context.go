@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 )
 
 const defaultMultipartMemory = 32 << 20
@@ -30,6 +31,24 @@ type Context struct {
 	StructValidator       validator.StructValidator
 	StatusCode            int
 	Logger                *msLog.Logger
+	Keys                  map[string]any
+	mu                    sync.RWMutex
+}
+
+func (c *Context) Set(key string, data any) {
+	c.mu.Lock()
+	if c.Keys == nil {
+		c.Keys = make(map[string]any, 1)
+	}
+	c.Keys[key] = data
+	c.mu.Unlock()
+}
+
+func (c *Context) Get(key string) (value any, ok bool) {
+	c.mu.RLock()
+	value, ok = c.Keys[key]
+	c.mu.Unlock()
+	return
 }
 
 func (c *Context) BindXML(obj any) error {
@@ -292,4 +311,8 @@ func (c *Context) HandleWithError(statusCode int, obj any, err error) {
 	} else {
 		err = c.JSON(statusCode, obj)
 	}
+}
+
+func (c *Context) SetBasicAuth(username, password string) {
+	c.R.Header.Set("Authorization", "Basic "+BasicAuth(username, password))
 }
