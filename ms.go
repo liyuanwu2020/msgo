@@ -1,7 +1,7 @@
 package msgo
 
 import (
-	msLog "github.com/liyuanwu2020/msgo/log"
+	"github.com/liyuanwu2020/msgo/mslog"
 	"github.com/liyuanwu2020/msgo/render"
 	"html/template"
 	"log"
@@ -117,7 +117,7 @@ type Engine struct {
 	funcMap      template.FuncMap
 	HTMLRender   render.HTMLRender
 	pool         sync.Pool
-	Logger       *msLog.Logger
+	Logger       *mslog.Logger
 	middlewares  []MiddlewareFunc
 	errorHandler ErrorHandler
 }
@@ -133,7 +133,7 @@ func New() *Engine {
 }
 func Default() *Engine {
 	engine := New()
-	engine.Logger = msLog.Default()
+	engine.Logger = mslog.Default()
 	engine.Use(Logging, Recovery)
 	engine.router.engine = engine
 	return engine
@@ -184,7 +184,7 @@ func (e *Engine) httpRequestHandle(ctx *Context) {
 		node := group.treeNode.Get(routerName)
 		if node != nil && node.isEnd {
 			handlerFunc, ok := group.handlerFuncMap[node.routerName]
-			//log.Printf("handlerFuncMap [%s] match [%s] %v", routerName, node.routerName, ok)
+			//mslog.Printf("handlerFuncMap [%s] match [%s] %v", routerName, node.routerName, ok)
 			if ok {
 				ctx.NodeRouterName = node.routerName
 				if handle, ok := handlerFunc[method]; ok {

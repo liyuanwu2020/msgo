@@ -2,6 +2,7 @@ package mspool
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -34,6 +35,12 @@ type Pool struct {
 	lock sync.Mutex
 	//保证释放只能调用一次
 	once sync.Once
+	//缓存
+	workerCache sync.Pool
+	//cond
+	cond *sync.Cond
+	//
+	PanicHandler func()
 }
 
 func NewPool(cap int) (*Pool, error) {
@@ -52,6 +59,13 @@ func NewExpirePool(cap int, expire int) (*Pool, error) {
 		expire:  time.Duration(expire) * time.Second,
 		release: make(chan signal, 1),
 	}
+	p.workerCache.New = func() any {
+		return &Worker{
+			pool: p,
+			task: make(chan func(), 1),
+		}
+	}
+	p.cond = sync.NewCond(&p.lock)
 	go p.expireWorker()
 	return p, nil
 }
@@ -63,15 +77,28 @@ func (p *Pool) expireWorker() {
 		if p.IsClosed() {
 			break
 		}
+		p.lock.Lock()
 		idleWorkers := p.workers
-		for i, w := range idleWorkers {
-			log.Println(i, ":", w.lastTime, time.Now().Sub(w.lastTime))
-			if time.Now().Sub(w.lastTime) > p.expire {
-				w.task = nil
-				w.pool = nil
-				idleWorkers[i] = nil
+		n := len(idleWorkers) - 1
+		if n >= 0 {
+			var clearN = -1
+			for i, w := range idleWorkers {
+				if time.Now().Sub(w.lastTime) <= p.expire {
+					break
+				}
+				clearN = i
+				w.task <- nil
 			}
+			if clearN != -1 {
+				if clearN >= len(idleWorkers)-1 {
+					p.workers = nil
+				} else {
+					p.workers = idleWorkers[clearN+1:]
+				}
+			}
+			fmt.Printf("清除完成,running:%d, workers:%v\n", p.running, p.workers)
 		}
+		p.lock.Unlock()
 	}
 }
 
@@ -99,7 +126,6 @@ func (p *Pool) Submit(task func()) error {
 	w := p.GetWorker()
 	//使用 worker 执行 task
 	w.task <- task
-	w.pool.incrRunning()
 	return nil
 }
 
@@ -109,37 +135,66 @@ func (p *Pool) GetWorker() *Worker {
 	//2. 如果 有空闲的worker 直接获取
 	//3. 如果没有空闲的worker，要新建一个worker
 	//4. 如果正在运行的workers 如果大于pool容量，阻塞等待，worker释放
+	p.lock.Lock()
 	idleWorkers := p.workers
 	n := len(idleWorkers) - 1
 	if n > -1 {
-		p.lock.Lock()
 		w := idleWorkers[n]
 		p.workers = idleWorkers[:n]
 		p.lock.Unlock()
 		return w
 	}
 	if p.cap > p.running {
+		p.lock.Unlock()
 		//创建worker
-		w := &Worker{
-			pool: p,
-			task: make(chan func(), 1),
+		c := p.workerCache.Get()
+		var w *Worker
+		if c == nil {
+			w = &Worker{
+				pool: p,
+				task: make(chan func(), 1),
+			}
+		} else {
+			w = c.(*Worker)
 		}
+
 		w.Run()
 		return w
 	}
-	for {
-		p.lock.Lock()
-		idleWorkers := p.workers
-		n := len(idleWorkers) - 1
-		if n > 0 {
-			w := idleWorkers[n]
-			idleWorkers[n] = nil
-			p.workers = idleWorkers[:n]
-			p.lock.Unlock()
+	p.lock.Unlock()
+	return p.waitIdleWorker()
+}
+
+func (p *Pool) waitIdleWorker() *Worker {
+	p.lock.Lock()
+	log.Println("得到等待通知,有空闲worker")
+	p.cond.Wait()
+	idleWorkers := p.workers
+	n := len(idleWorkers) - 1
+	if n < 0 {
+		p.lock.Unlock()
+		if p.cap > p.running {
+			//创建worker
+			c := p.workerCache.Get()
+			var w *Worker
+			if c == nil {
+				w = &Worker{
+					pool: p,
+					task: make(chan func(), 1),
+				}
+			} else {
+				w = c.(*Worker)
+			}
+			w.Run()
 			return w
 		}
-		p.lock.Unlock()
+		return p.waitIdleWorker()
 	}
+	w := idleWorkers[n]
+	idleWorkers[n] = nil
+	p.workers = idleWorkers[:n]
+	p.lock.Unlock()
+	return w
 }
 
 func (p *Pool) incrRunning() {
@@ -154,6 +209,7 @@ func (p *Pool) PutWorker(w *Worker) {
 	w.lastTime = time.Now()
 	p.lock.Lock()
 	p.workers = append(p.workers, w)
+	p.cond.Signal()
 	p.lock.Unlock()
 }
 
@@ -183,4 +239,12 @@ func (p *Pool) Restart() bool {
 	}
 	_ = <-p.release
 	return true
+}
+
+func (p *Pool) Running() int {
+	return int(atomic.LoadInt32(&p.running))
+}
+
+func (p *Pool) Free() int {
+	return int(p.cap - p.running)
 }

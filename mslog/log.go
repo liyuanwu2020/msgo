@@ -1,4 +1,4 @@
-package log
+package mslog
 
 import (
 	"fmt"
@@ -137,19 +137,19 @@ func (l *Logger) SetLogPath(s string) {
 	l.LogPath = s
 	l.Outs = append(l.Outs, &LoggerWriter{
 		Level: -1,
-		out:   FileWriter(path.Join(s, "all.log")),
+		out:   FileWriter(path.Join(s, "all.mslog")),
 	})
 	l.Outs = append(l.Outs, &LoggerWriter{
 		Level: LevelDebug,
-		out:   FileWriter(path.Join(s, "debug.log")),
+		out:   FileWriter(path.Join(s, "debug.mslog")),
 	})
 	l.Outs = append(l.Outs, &LoggerWriter{
 		Level: LevelInfo,
-		out:   FileWriter(path.Join(s, "info.log")),
+		out:   FileWriter(path.Join(s, "info.mslog")),
 	})
 	l.Outs = append(l.Outs, &LoggerWriter{
 		Level: LevelError,
-		out:   FileWriter(path.Join(s, "error.log")),
+		out:   FileWriter(path.Join(s, "error.mslog")),
 	})
 }
 
@@ -168,7 +168,7 @@ func (l *Logger) CheckFileSize(w *LoggerWriter) {
 		if size >= l.LogFilesize {
 			_, name := path.Split(stat.Name())
 			fileName := name[0:strings.Index(name, ".")]
-			writer := FileWriter(path.Join(l.LogPath, msstrings.JoinStrings(fileName, ".", time.Now().Unix(), ".log")))
+			writer := FileWriter(path.Join(l.LogPath, msstrings.JoinStrings(fileName, ".", time.Now().Unix(), ".mslog")))
 			w.out = writer
 		}
 	}

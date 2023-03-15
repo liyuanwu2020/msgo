@@ -3,7 +3,7 @@ package msgo
 import (
 	"errors"
 	"github.com/liyuanwu2020/msgo/binding"
-	msLog "github.com/liyuanwu2020/msgo/log"
+	msLog "github.com/liyuanwu2020/msgo/mslog"
 	"github.com/liyuanwu2020/msgo/render"
 	"github.com/liyuanwu2020/msgo/validator"
 	"html/template"
