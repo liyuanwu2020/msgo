@@ -33,8 +33,12 @@ type Context struct {
 	Logger                *msLog.Logger
 	Keys                  map[string]any
 	mu                    sync.RWMutex
+	sameSite              http.SameSite
 }
 
+func (c *Context) SetSameSite(s http.SameSite) {
+	c.sameSite = s
+}
 func (c *Context) Set(key string, data any) {
 	c.mu.Lock()
 	if c.Keys == nil {
@@ -315,4 +319,20 @@ func (c *Context) HandleWithError(statusCode int, obj any, err error) {
 
 func (c *Context) SetBasicAuth(username, password string) {
 	c.R.Header.Set("Authorization", "Basic "+BasicAuth(username, password))
+}
+
+func (c *Context) SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) {
+	if path == "" {
+		path = "/"
+	}
+	http.SetCookie(c.W, &http.Cookie{
+		Name:     name,
+		Value:    url.QueryEscape(value),
+		MaxAge:   maxAge,
+		Path:     path,
+		Domain:   domain,
+		SameSite: c.sameSite,
+		Secure:   secure,
+		HttpOnly: httpOnly,
+	})
 }
