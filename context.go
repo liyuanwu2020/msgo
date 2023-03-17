@@ -51,7 +51,7 @@ func (c *Context) Set(key string, data any) {
 func (c *Context) Get(key string) (value any, ok bool) {
 	c.mu.RLock()
 	value, ok = c.Keys[key]
-	c.mu.Unlock()
+	c.mu.RUnlock()
 	return
 }
 
@@ -321,7 +321,7 @@ func (c *Context) SetBasicAuth(username, password string) {
 	c.R.Header.Set("Authorization", "Basic "+BasicAuth(username, password))
 }
 
-func (c *Context) SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) {
+func (c *Context) SetCookie(name, value string, maxAge int, path string, domain string, secure, httpOnly bool) {
 	if path == "" {
 		path = "/"
 	}
@@ -335,4 +335,12 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 		Secure:   secure,
 		HttpOnly: httpOnly,
 	})
+}
+
+func (c *Context) GetCookie(name string) (string, error) {
+	cookie, err := c.R.Cookie(name)
+	if err != nil {
+		return "", err
+	}
+	return cookie.String(), nil
 }

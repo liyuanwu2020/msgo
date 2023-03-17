@@ -169,7 +169,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (e *Engine) RunTLS(addr, certFile, keyFile string) {
 	err := http.ListenAndServeTLS(addr, certFile, keyFile, e.Handler())
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("ListenAndServeTLS err", err)
 	}
 }
 
