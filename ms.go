@@ -1,6 +1,7 @@
 package msgo
 
 import (
+	"github.com/liyuanwu2020/msgo/config"
 	"github.com/liyuanwu2020/msgo/mslog"
 	"github.com/liyuanwu2020/msgo/render"
 	"html/template"
@@ -134,6 +135,10 @@ func New() *Engine {
 func Default() *Engine {
 	engine := New()
 	engine.Logger = mslog.Default()
+	logPath, ok := config.Conf.Log["path"]
+	if ok {
+		engine.Logger.SetLogPath(logPath.(string))
+	}
 	engine.Use(Logging, Recovery)
 	engine.router.engine = engine
 	return engine
