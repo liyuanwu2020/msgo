@@ -126,7 +126,7 @@ const (
 )
 
 const (
-	GET      = "GET"
+	GET      = http.MethodGet
 	POSTForm = "POST_FORM"
 	POSTJson = "POST_JSON"
 )
@@ -188,6 +188,7 @@ func (c *MsHttpClient) Do(service string, method string) MsService {
 	co := msService.Env()
 	prefix := co.Url()
 	f := func(args map[string]any) ([]byte, error) {
+		fmt.Println(mt, prefix+path)
 		if mt == GET {
 			return c.Get(prefix+path, args)
 		}
@@ -197,7 +198,7 @@ func (c *MsHttpClient) Do(service string, method string) MsService {
 		if mt == POSTJson {
 			return c.PostJson(prefix+path, args)
 		}
-		return nil, nil
+		return nil, errors.New("no method match :" + mt)
 	}
 	value := reflect.ValueOf(f)
 	vVar.Field(fieldFind).Set(value)
