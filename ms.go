@@ -178,10 +178,10 @@ func (e *Engine) RunTLS(addr, certFile, keyFile string) {
 	}
 }
 
-func (e *Engine) Run() {
+func (e *Engine) Run(addr string) {
 
 	http.Handle("/", e)
-	err := http.ListenAndServe(":8088", nil)
+	err := http.ListenAndServe(addr, nil)
 	if err != nil {
 		log.Fatal("启动失败", err)
 	}
