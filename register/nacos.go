@@ -1,23 +1,29 @@
 package register
 
 import (
+	"fmt"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 )
 
-func CreateNacosClient() (naming_client.INamingClient, error) {
-	clientConfig := *constant.NewClientConfig(
-		constant.WithNamespaceId(""), //When namespace is public, fill in the blank string here.
+type MsNacos struct {
+	client naming_client.INamingClient
+}
+
+func MsNacosDefault() *MsNacos {
+	nacos := &MsNacos{}
+	options := MsRegisterOption{}
+	options.NacosClientConfig = constant.NewClientConfig(
+		constant.WithNamespaceId("1123"), //When namespace is public, fill in the blank string here.
 		constant.WithTimeoutMs(5000),
 		constant.WithNotLoadCacheAtStart(true),
 		constant.WithLogDir("/tmp/nacos/log"),
 		constant.WithCacheDir("/tmp/nacos/cache"),
 		constant.WithLogLevel("debug"),
 	)
-
-	serverConfigs := []constant.ServerConfig{
+	options.NacosServerConfig = []constant.ServerConfig{
 		*constant.NewServerConfig(
 			"127.0.0.1",
 			8848,
@@ -25,31 +31,29 @@ func CreateNacosClient() (naming_client.INamingClient, error) {
 			constant.WithContextPath("/nacos"),
 		),
 	}
+	nacos.CreateClient(options)
+	return nacos
+}
+
+func (m *MsNacos) CreateClient(option MsRegisterOption) error {
 	namingClient, err := clients.NewNamingClient(
 		vo.NacosClientParam{
-			ClientConfig:  &clientConfig,
-			ServerConfigs: serverConfigs,
+			ClientConfig:  option.NacosClientConfig,
+			ServerConfigs: option.NacosServerConfig,
 		},
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return namingClient, nil
+	m.client = namingClient
+	return nil
 }
 
-type NacosServiceConfig struct {
-	Ip          string
-	Port        uint64
-	ServiceName string
-	ClusterName string
-	GroupName   string
-}
-
-func NacosServiceRegister(namingClient naming_client.INamingClient, config NacosServiceConfig) (bool, error) {
-	success, err := namingClient.RegisterInstance(vo.RegisterInstanceParam{
-		Ip:          config.Ip,
-		Port:        config.Port,
-		ServiceName: config.ServiceName,
+func (m *MsNacos) RegisterService(serviceName string, host string, port int) error {
+	_, err := m.client.RegisterInstance(vo.RegisterInstanceParam{
+		Ip:          host,
+		Port:        uint64(port),
+		ServiceName: serviceName,
 		Weight:      10,
 		Enable:      true,
 		Healthy:     true,
@@ -58,17 +62,30 @@ func NacosServiceRegister(namingClient naming_client.INamingClient, config Nacos
 		//ClusterName: "cluster-a", // default value is DEFAULT
 		//GroupName:   "group-a",   // default value is DEFAULT_GROUP
 	})
-	return success, err
+	return err
 }
 
-func GetInstance(namingClient naming_client.INamingClient, serviceName string) (string, uint64, error) {
-	instance, err := namingClient.SelectOneHealthyInstance(vo.SelectOneHealthInstanceParam{
+func (m *MsNacos) GetService(serviceName string) (string, error) {
+	instance, err := m.client.SelectOneHealthyInstance(vo.SelectOneHealthInstanceParam{
 		ServiceName: serviceName,
 		//GroupName:   "group-a",             // default value is DEFAULT_GROUP
 		//Clusters:    []string{"cluster-a"}, // default value is DEFAULT
 	})
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
-	return instance.Ip, instance.Port, nil
+	return fmt.Sprintf("%s:%d", instance.Ip, instance.Port), nil
+}
+
+func (m *MsNacos) Close() error {
+	m.client.CloseClient()
+	return nil
+}
+
+type NacosServiceConfig struct {
+	Ip          string
+	Port        uint64
+	ServiceName string
+	ClusterName string
+	GroupName   string
 }
