@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"unicode"
 )
 
 func JoinStrings(data ...any) string {
@@ -22,4 +23,21 @@ func checkString(v any) string {
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+func SubStringLast(str, substr string) string {
+	index := strings.Index(str, substr)
+	if index < 0 {
+		return ""
+	}
+	return str[index+len(substr):]
+}
+
+func IsASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
 }

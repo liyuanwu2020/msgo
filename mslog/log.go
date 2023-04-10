@@ -186,6 +186,12 @@ func Default() *Logger {
 	return logger
 }
 
+func DefaultJson() *Logger {
+	logger := Default()
+	logger.Formatter = JsonFormat
+	return logger
+}
+
 func FileWriter(filename string) io.Writer {
 	file, _ := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	return file
