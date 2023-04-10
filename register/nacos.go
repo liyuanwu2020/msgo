@@ -16,7 +16,7 @@ func MsNacosDefault() *MsNacos {
 	nacos := &MsNacos{}
 	options := MsRegisterOption{}
 	options.NacosClientConfig = constant.NewClientConfig(
-		constant.WithNamespaceId("1123"), //When namespace is public, fill in the blank string here.
+		constant.WithNamespaceId(""), //When namespace is public, fill in the blank string here.
 		constant.WithTimeoutMs(5000),
 		constant.WithNotLoadCacheAtStart(true),
 		constant.WithLogDir("/tmp/nacos/log"),
@@ -80,12 +80,4 @@ func (m *MsNacos) GetService(serviceName string) (string, error) {
 func (m *MsNacos) Close() error {
 	m.client.CloseClient()
 	return nil
-}
-
-type NacosServiceConfig struct {
-	Ip          string
-	Port        uint64
-	ServiceName string
-	ClusterName string
-	GroupName   string
 }

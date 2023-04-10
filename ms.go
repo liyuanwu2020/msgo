@@ -132,6 +132,7 @@ func New() *Engine {
 	}
 	return engine
 }
+
 func Default() *Engine {
 	engine := New()
 	engine.Logger = mslog.Default()
