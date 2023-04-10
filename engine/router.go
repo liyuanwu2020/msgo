@@ -3,10 +3,9 @@ package engine
 import "net/http"
 
 type router struct {
-	name             string
-	handlerFuncMap   map[string]map[string]HandlerFunc
-	handlerMethodMap map[string][]string
-	node             treeNode
+	name           string
+	handlerFuncMap map[string]map[string]HandlerFunc
+	node           treeNode
 }
 
 const ANY = "ANY"
@@ -29,6 +28,5 @@ func (r *router) request(name string, handlerFunc HandlerFunc, method string, mi
 		panic(name + " 有重复的路由")
 	}
 	r.handlerFuncMap[name][method] = handlerFunc
-	r.handlerMethodMap[method] = append(r.handlerMethodMap[method], name)
 	r.node.Put(name)
 }

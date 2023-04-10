@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"log"
 	"strings"
 )
 
@@ -18,7 +17,6 @@ var sep = "/"
 func (t *treeNode) Put(path string) {
 	//每次只能构建一个链路
 	pathArr := strings.Split(path, sep)
-	log.Println(pathArr)
 	pathLen := len(pathArr)
 	for i := 1; i < pathLen; i++ {
 		name := pathArr[i]

@@ -2,7 +2,6 @@ package engine
 
 import (
 	"github.com/liyuanwu2020/msgo/mslog"
-	"log"
 	"net/http"
 )
 
@@ -21,35 +20,23 @@ func (e *Engine) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		R: request,
 	}
 	method := ctx.R.Method
-	//for _, group := range e.routerGroups {
-	//	//去掉uri的分组名称
-	//	routerName := SubStringLast(ctx.R.URL.Path, "/"+group.name)
-	//	//路由是否存在
-	//	node := group.treeNode.Get(routerName)
-	//	if node != nil && node.isEnd {
-	//		handlerFunc, ok := group.handlerFuncMap[node.routerName]
-	//		//mslog.Printf("handlerFuncMap [%s] match [%s] %v", routerName, node.routerName, ok)
-	//		if ok {
-	//			ctx.NodeRouterName = node.routerName
-	//			if handle, ok := handlerFunc[method]; ok {
-	//				ctx.RequestMethod = method
-	//				group.methodHandler(handle, ctx)
-	//				return
-	//			}
-	//
-	//			if handle, ok := handlerFunc[ANY]; ok {
-	//				ctx.RequestMethod = ANY
-	//				group.methodHandler(handle, ctx)
-	//				return
-	//			}
-	//			ctx.W.WriteHeader(http.StatusMethodNotAllowed)
-	//			log.Printf("%s %s not allowed", ctx.R.RequestURI, method)
-	//			return
-	//		}
-	//	}
-	//}
+	requestPath := ctx.R.URL.Path
+	if node := e.router.node.Get(requestPath); node != nil {
+		handlerFuncMap, ok := e.handlerFuncMap[node.routerName]
+		if ok {
+			ctx.NodeRouterName = node.routerName
+			for _, v := range []string{method, ANY} {
+				if handle, ok := handlerFuncMap[v]; ok {
+					ctx.RequestMethod = v
+					handle(ctx)
+					return
+				}
+			}
+			ctx.W.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+	}
 	ctx.W.WriteHeader(http.StatusNotFound)
-	log.Println(method)
 }
 
 // Run TLS use []string{certFile, keyFile}
@@ -75,8 +62,10 @@ func Default() *Engine {
 }
 
 func New() *Engine {
+	r := router{}
+	r.handlerFuncMap = make(map[string]map[string]HandlerFunc, 10)
 	engine := &Engine{
-		router: router{},
+		router: r,
 	}
 	return engine
 }
