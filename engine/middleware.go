@@ -18,8 +18,6 @@ func Logging(next HandlerFunc) HandlerFunc {
 		Out:       mslog.DefaultWriter,
 	}
 	return func(ctx *Context) {
-		ctx.Logger.Info("执行顺序 logging")
-
 		// Start timer
 		start := time.Now()
 		path := ctx.R.URL.Path

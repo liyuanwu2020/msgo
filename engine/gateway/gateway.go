@@ -3,7 +3,7 @@ package gateway
 type MsGateway struct {
 }
 
-type MsGatewayConf struct {
+type GWConfig struct {
 	Name string
 	Path string
 	Host string

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"github.com/liyuanwu2020/msgo/engine/gateway"
 	"github.com/liyuanwu2020/msgo/mslog"
 	"net/http"
 )
@@ -76,6 +77,10 @@ func (e *Engine) Run(addr string, file ...string) {
 
 func (e *Engine) Use(middlewareFunc ...MiddlewareFunc) {
 	e.middlewares = append(e.middlewares, middlewareFunc...)
+}
+
+func (e *Engine) SetGateConfigs(configs []gateway.GWConfig) {
+
 }
 
 func Default() *Engine {
