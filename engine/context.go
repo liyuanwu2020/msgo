@@ -235,7 +235,11 @@ func (c *Context) HTML(status int, html string) error {
 	return c.Render(&render.HTML{Data: html}, status)
 }
 
-func (c *Context) JSON(status int, data any) error {
+func (c *Context) Json(data any) error {
+	return c.Render(&render.JSON{Data: data}, http.StatusOK)
+}
+
+func (c *Context) JsonWithStatus(status int, data any) error {
 	return c.Render(&render.JSON{Data: data}, status)
 }
 
@@ -302,9 +306,9 @@ func (c *Context) Fail(code int, msg any) {
 func (c *Context) HandleWithError(statusCode int, obj any, err error) {
 	if err != nil {
 		code, data := c.engine.errorHandler(err)
-		err = c.JSON(code, data)
+		err = c.JsonWithStatus(code, data)
 	} else {
-		err = c.JSON(statusCode, obj)
+		err = c.JsonWithStatus(statusCode, obj)
 	}
 }
 

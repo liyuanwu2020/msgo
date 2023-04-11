@@ -69,11 +69,6 @@ type LoggerFormatParams struct {
 	Msg          any
 }
 
-type LoggerFormatter struct {
-	Level        LoggerLevel
-	IsColor      bool
-	LoggerFields Fields
-}
 type Logger struct {
 	Formatter    LoggerFormat
 	Level        LoggerLevel
