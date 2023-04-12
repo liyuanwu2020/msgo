@@ -1,12 +1,17 @@
 package engine
 
-import "net/http"
+import (
+	"github.com/liyuanwu2020/msgo/engine/gateway"
+	"net/http"
+)
 
 type router struct {
 	name               string
 	handlerFuncMap     map[string]map[string]HandlerFunc
 	node               treeNode
 	middlewaresFuncMap map[string]map[string][]MiddlewareFunc
+	gatewayConfigs     []gateway.GWConfig
+	gatewayConfigMap   map[string]gateway.GWConfig
 }
 
 const ANY = "ANY"

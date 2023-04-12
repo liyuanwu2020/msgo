@@ -14,9 +14,13 @@ type treeNode struct {
 
 var sep = "/"
 
-func (t *treeNode) Put(path string) {
+func (t *treeNode) Put(path string, routerName ...string) {
 	//每次只能构建一个链路
 	pathArr := strings.Split(path, sep)
+	rName := ""
+	if len(routerName) > 0 {
+		rName = routerName[0]
+	}
 	pathLen := len(pathArr)
 	for i := 1; i < pathLen; i++ {
 		name := pathArr[i]
@@ -31,7 +35,7 @@ func (t *treeNode) Put(path string) {
 		}
 		if !isMatch {
 			isEnd := i == pathLen-1
-			node := &treeNode{name: name, children: make([]*treeNode, 0), isEnd: isEnd}
+			node := &treeNode{name: name, children: make([]*treeNode, 0), isEnd: isEnd, routerName: rName}
 			children = append(children, node)
 			t.children = children
 			t = node
@@ -52,7 +56,9 @@ func (t *treeNode) Get(path string) *treeNode {
 			if child.name == name || child.name == "*" || strings.Contains(child.name, ":") {
 				isMatch = true
 				routerName += sep + child.name
-				child.routerName = routerName
+				if child.routerName == "" {
+					child.routerName = routerName
+				}
 				t = child
 				if index == len(pathArr)-1 {
 					return child
@@ -64,7 +70,9 @@ func (t *treeNode) Get(path string) *treeNode {
 			for _, child := range children {
 				if child.name == "**" {
 					routerName += "/" + name
-					child.routerName = routerName
+					if child.routerName == "" {
+						child.routerName = routerName
+					}
 					return child
 				}
 			}

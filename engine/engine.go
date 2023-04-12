@@ -1,9 +1,12 @@
 package engine
 
 import (
+	"fmt"
 	"github.com/liyuanwu2020/msgo/engine/gateway"
 	"github.com/liyuanwu2020/msgo/mslog"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 )
 
 type Engine struct {
@@ -23,7 +26,30 @@ func (e *Engine) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 	method := ctx.R.Method
 	requestPath := ctx.R.URL.Path
-	if node := e.router.node.Get(requestPath); node != nil {
+
+	if node := e.node.Get(requestPath); node != nil {
+		//网关的处理逻辑
+		if e.gatewayConfigs != nil {
+			gwConfig, _ := e.gatewayConfigMap[node.routerName]
+			target, _ := url.Parse(fmt.Sprintf("http://%s:%d%s", gwConfig.Host, gwConfig.Port, requestPath))
+			e.Logger.Info(target)
+			return
+
+			director := func(request *http.Request) {
+
+			}
+			response := func(response *http.Response) error {
+
+				return nil
+			}
+			handler := func(writer http.ResponseWriter, request *http.Request, err error) {
+
+			}
+			proxy := httputil.ReverseProxy{Director: director, ModifyResponse: response, ErrorHandler: handler}
+			proxy.ServeHTTP(writer, request)
+			return
+		}
+
 		handlerFuncMap, ok := e.handlerFuncMap[node.routerName]
 		if ok {
 			ctx.NodeRouterName = node.routerName
@@ -80,7 +106,13 @@ func (e *Engine) Use(middlewareFunc ...MiddlewareFunc) {
 }
 
 func (e *Engine) SetGateConfigs(configs []gateway.GWConfig) {
-
+	e.gatewayConfigs = configs
+	if len(configs) > 0 {
+		for _, config := range configs {
+			e.node.Put(config.Path, config.Name)
+			e.gatewayConfigMap[config.Name] = config
+		}
+	}
 }
 
 func Default() *Engine {
@@ -94,6 +126,7 @@ func New() *Engine {
 	r := router{}
 	r.handlerFuncMap = make(map[string]map[string]HandlerFunc, 10)
 	r.middlewaresFuncMap = make(map[string]map[string][]MiddlewareFunc, 10)
+	r.gatewayConfigMap = make(map[string]gateway.GWConfig, 10)
 	engine := &Engine{
 		router: r,
 	}
