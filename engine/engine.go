@@ -32,39 +32,41 @@ func (e *Engine) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	if node := e.node.Get(requestPath); node != nil {
 		//网关的处理逻辑
 		if e.gatewayConfigs != nil {
-			var rawURL string
-			gwConfig, _ := e.gatewayConfigMap[node.routerName]
-			if e.register == nil {
-				rawURL = fmt.Sprintf("http://%s:%d%s", gwConfig.Host, gwConfig.Port, requestPath)
-			} else {
-				serviceName, err := e.register.GetService(gwConfig.ServiceName)
-				e.Logger.Info("注册中心结果")
-				if err != nil {
+			gwConfig, ok := e.gatewayConfigMap[node.routerName]
+			if ok {
+				var rawURL string
+				if e.register == nil {
+					rawURL = fmt.Sprintf("http://%s:%d%s", gwConfig.Host, gwConfig.Port, requestPath)
+				} else {
+					serviceName, err := e.register.GetService(gwConfig.ServiceName)
+					e.Logger.Info("注册中心结果")
+					if err != nil {
 
+					}
+					rawURL = fmt.Sprintf("http://%s", serviceName)
 				}
-				rawURL = fmt.Sprintf("http://%s", serviceName)
-			}
-			target, _ := url.Parse(rawURL)
-			director := func(request *http.Request) {
-				request.Host = target.Host
-				request.URL.Host = target.Host
-				request.URL.Path = target.Path
-				request.URL.Scheme = target.Scheme
-				if _, ok := request.Header["User-Agent"]; !ok {
-					request.Header.Set("User-Agent", "")
+				target, _ := url.Parse(rawURL)
+				director := func(request *http.Request) {
+					request.Host = target.Host
+					request.URL.Host = target.Host
+					request.URL.Path = target.Path
+					request.URL.Scheme = target.Scheme
+					if _, ok := request.Header["User-Agent"]; !ok {
+						request.Header.Set("User-Agent", "")
+					}
 				}
+				response := func(response *http.Response) error {
+					e.Logger.Info("结果处理")
+					return nil
+				}
+				handler := func(writer http.ResponseWriter, request *http.Request, err error) {
+					e.Logger.Info("错误处理")
+					e.Logger.Error(err)
+				}
+				proxy := httputil.ReverseProxy{Director: director, ModifyResponse: response, ErrorHandler: handler}
+				proxy.ServeHTTP(writer, request)
+				return
 			}
-			response := func(response *http.Response) error {
-				e.Logger.Info("结果处理")
-				return nil
-			}
-			handler := func(writer http.ResponseWriter, request *http.Request, err error) {
-				e.Logger.Info("错误处理")
-				e.Logger.Error(err)
-			}
-			proxy := httputil.ReverseProxy{Director: director, ModifyResponse: response, ErrorHandler: handler}
-			proxy.ServeHTTP(writer, request)
-			return
 		}
 
 		handlerFuncMap, ok := e.handlerFuncMap[node.routerName]
