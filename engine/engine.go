@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/liyuanwu2020/msgo/engine/gateway"
 	"github.com/liyuanwu2020/msgo/mslog"
+	"github.com/liyuanwu2020/msgo/register"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -14,6 +15,7 @@ type Engine struct {
 	Logger       *mslog.Logger
 	middlewares  []MiddlewareFunc
 	errorHandler ErrorHandler
+	register     register.MsRegister
 }
 
 type ErrorHandler func(err error) (int, any)
@@ -30,20 +32,35 @@ func (e *Engine) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	if node := e.node.Get(requestPath); node != nil {
 		//网关的处理逻辑
 		if e.gatewayConfigs != nil {
+			var rawURL string
 			gwConfig, _ := e.gatewayConfigMap[node.routerName]
-			target, _ := url.Parse(fmt.Sprintf("http://%s:%d%s", gwConfig.Host, gwConfig.Port, requestPath))
-			e.Logger.Info(target)
-			return
+			if e.register == nil {
+				rawURL = fmt.Sprintf("http://%s:%d%s", gwConfig.Host, gwConfig.Port, requestPath)
+			} else {
+				serviceName, err := e.register.GetService(gwConfig.ServiceName)
+				e.Logger.Info("注册中心结果")
+				if err != nil {
 
+				}
+				rawURL = fmt.Sprintf("http://%s", serviceName)
+			}
+			target, _ := url.Parse(rawURL)
 			director := func(request *http.Request) {
-
+				request.Host = target.Host
+				request.URL.Host = target.Host
+				request.URL.Path = target.Path
+				request.URL.Scheme = target.Scheme
+				if _, ok := request.Header["User-Agent"]; !ok {
+					request.Header.Set("User-Agent", "")
+				}
 			}
 			response := func(response *http.Response) error {
-
+				e.Logger.Info("结果处理")
 				return nil
 			}
 			handler := func(writer http.ResponseWriter, request *http.Request, err error) {
-
+				e.Logger.Info("错误处理")
+				e.Logger.Error(err)
 			}
 			proxy := httputil.ReverseProxy{Director: director, ModifyResponse: response, ErrorHandler: handler}
 			proxy.ServeHTTP(writer, request)
@@ -113,6 +130,10 @@ func (e *Engine) SetGateConfigs(configs []gateway.GWConfig) {
 			e.gatewayConfigMap[config.Name] = config
 		}
 	}
+}
+
+func (e *Engine) SetRegister(register register.MsRegister) {
+	e.register = register
 }
 
 func Default() *Engine {
